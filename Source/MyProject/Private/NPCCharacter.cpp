@@ -47,7 +47,7 @@ void ANPCCharacter::BeginPlay()
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, TEXT("[NPC] AI Controller atanamadı!"));
 	}
 
-	GetCharacterMovement()->SetAvoidanceEnabled(true);
+    GetCharacterMovement()->SetAvoidanceEnabled(false); // **Çarpışma önlemeyi kapat**
 	GetCharacterMovement()->AvoidanceWeight = 0.5f;
 	
 	DetermineNextItemToGive();
@@ -82,41 +82,41 @@ void ANPCCharacter::Tick(float DeltaTime)
 
 
 
-
-
 void ANPCCharacter::MoveToTarget()
 {
-	if (TargetLocation.IsNearlyZero())
+	if (TargetLocation.IsNearlyZero() || IsMovingToTarget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[NPC] MoveToTarget çağrıldı ama TargetLocation tanımlı değil!"));
+		UE_LOG(LogTemp, Warning, TEXT("[NPC] Zaten hareket halinde, tekrar yönlendirilmedi!"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[NPC] MoveToTarget Çağrıldı! Hedef Nokta: %s"), *TargetLocation.ToString());
+	int32 QueueIndex = WaitingQueue.Find(this);
+	FVector QueuePosition = GetQueuePosition(QueueIndex);
+
+	if (FVector::Dist(CurrentTargetLocation, QueuePosition) < 10.0f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[NPC] Zaten hedefe gidiyor, tekrar yönlendirme yapılmadı."));
+		return;
+	}
+
+	CurrentTargetLocation = QueuePosition;
+	IsMovingToTarget = true;  // NPC'yi hareket moduna al
 
 	AAIController* AIController = Cast<AAIController>(GetController());
 	if (AIController)
 	{
-		EPathFollowingRequestResult::Type MoveResult = AIController->MoveToLocation(TargetLocation, 50.0f, true, true, true, true);
-
-		if (MoveResult == EPathFollowingRequestResult::RequestSuccessful)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[NPC] AI Controller başarıyla hedefe yönlendirildi!"));
-		}
-		else if (MoveResult == EPathFollowingRequestResult::AlreadyAtGoal)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[NPC] AI Controller zaten hedefteydi!"));
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("[NPC] AI Controller hedefe yönlendirmeyi başaramadı!"));
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[NPC] AI Controller BULUNAMADI! NPC HAREKET EDEMİYOR!"));
+		AIController->MoveToLocation(CurrentTargetLocation, 10.0f, true, true, true, true, nullptr, true);
+		UE_LOG(LogTemp, Warning, TEXT("[NPC] AI başarıyla sıradaki pozisyona yönlendirildi!"));
 	}
 }
+
+
+
+
+
+
+
+
 
 
 
@@ -133,17 +133,70 @@ void ANPCCharacter::CheckQueue()
 		return;
 	}
 
-	if (WaitingQueue.Num() == 0)
+	WaitingQueue.Add(this);
+	int32 QueueIndex = WaitingQueue.Find(this);
+
+	// Eğer ilk NPC isek hemen MoveToTarget çağır
+	if (QueueIndex == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] En öndeki NPC, etkileşime başlıyor!"));
-		StartInteraction();
+		MoveToTarget();
 	}
 	else
 	{
-		WaitingQueue.Add(this);
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] Kuyruğa eklendi, bekliyor. Mevcut Kuyruk Uzunluğu: %d"), WaitingQueue.Num());
+		// Bir önündeki NPC'nin arkasına gitmesini bekle
+		GetWorldTimerManager().SetTimerForNextTick(this, &ANPCCharacter::MoveToTarget);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[NPC] Kuyruğa eklendi, bekliyor. Mevcut Kuyruk Uzunluğu: %d"), WaitingQueue.Num());
+}
+
+
+
+
+
+FVector ANPCCharacter::GetQueuePosition(int32 Index)
+{
+	FVector BaseLocation = TargetLocation; // İlk NPC için hedef konum
+	float OffsetDistance = 125.0f;  // NPC'ler arasındaki sabit mesafe
+
+	// Eğer bu ilk NPC ise (Index == 0), doğrudan TargetLocation'a gitsin
+	if (Index == 0)
+	{
+		return BaseLocation;
+	}
+
+	// Önceki NPC'nin konumunu al
+	if (WaitingQueue.IsValidIndex(Index - 1))
+	{
+		FVector PreviousNPCPosition = WaitingQueue[Index - 1]->GetActorLocation();
+		return PreviousNPCPosition - FVector(OffsetDistance, 0.0f, 0.0f);
+	}
+
+	// Eğer önceki NPC'nin pozisyonu bulunamazsa, TargetLocation'un biraz gerisine koy
+	return BaseLocation - FVector(OffsetDistance * Index, 0.0f, 0.0f);
+}
+
+
+
+
+
+
+
+
+void ANPCCharacter::MoveToQueuePosition(FVector QueuePosition)
+{
+	AAIController* AIController = Cast<AAIController>(GetController());
+	if (AIController)
+	{
+		AIController->MoveToLocation(QueuePosition, 50.0f, true, true, true, true, nullptr, true);
+		UE_LOG(LogTemp, Warning, TEXT("[NPC] Sıraya gidiyor. Hedef: X=%.2f, Y=%.2f, Z=%.2f"), QueuePosition.X, QueuePosition.Y, QueuePosition.Z);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[NPC] AI Controller bulunamadı! NPC sıraya hareket edemiyor."));
 	}
 }
+
 
 
 
@@ -232,6 +285,22 @@ bool ANPCCharacter::HasReachedSpawnLocation() const
 
 	return false;
 }
+
+bool ANPCCharacter::HasReachedTarget()
+{
+	float Distance = FVector::Dist(GetActorLocation(), CurrentTargetLocation);
+    
+	if (Distance <= 10.0f)
+	{
+		IsMovingToTarget = false; // NPC artık hareket etmiyor
+		return true;
+	}
+
+	return false;
+}
+
+
+
 
 void ANPCCharacter::Despawn()
 {

@@ -30,6 +30,8 @@ public:
 
 	void ReturnToSpawn(FVector SpawnPoint);
 	void CheckQueue();
+	FVector GetQueuePosition(int32 Index);
+	void MoveToQueuePosition(FVector QueuePosition);
 	void CheckAIController();
 	void SetNPCState(ENPCState NewState);
 	void StartInteraction();
@@ -37,6 +39,7 @@ public:
 	void ReturnToSpawn();
 	bool HasReachedTargetLocation() const;
 	bool HasReachedSpawnLocation() const;
+	bool HasReachedTarget();
 	void Despawn();
 
 
@@ -69,8 +72,11 @@ public:
 	void MoveToTarget();
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
+	FVector CurrentTargetLocation;
 	void RandomizeStats();
 
+	bool IsMovingToTarget = false;
+	
 	void UpdateNPCStatsInUI(UUserWidget* InDialogueWidget);
 	// **NPC'nin rastgele statları**
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Stats")

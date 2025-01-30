@@ -39,7 +39,6 @@ void ANPCSpawner::SpawnNPC()
 {
     if (CurrentNPCCount >= MaxNPCCount)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[NPCSpawner] Maksimum NPC sayısına ulaşıldı, yeni NPC spawn edilmeyecek!"));
         return;
     }
 
