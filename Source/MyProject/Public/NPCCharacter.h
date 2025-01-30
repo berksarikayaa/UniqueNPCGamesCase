@@ -41,6 +41,7 @@ public:
 	bool HasReachedSpawnLocation() const;
 	bool HasReachedTarget();
 	void Despawn();
+	FHotbarItem TaskItem;
 
 
 	bool bInteracted = false;

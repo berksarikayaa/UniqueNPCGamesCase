@@ -60,7 +60,6 @@ void ANPCSpawner::SpawnNPC()
     }
 }
 
-
 void ANPCSpawner::DecreaseNPCCount()
 {
     if (CurrentNPCCount > 0)

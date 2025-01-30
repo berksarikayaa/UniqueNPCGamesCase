@@ -131,9 +131,6 @@ void AMyProjectCharacter::UpdateOptionButton3Text(const FString& ItemName)
     }
 }
 
-
-
-
 void AMyProjectCharacter::BindDialogueButtons()
 {
     if (!CurrentDialogueWidget)
@@ -319,9 +316,6 @@ void AMyProjectCharacter::Interact()
 	}
 }
 
-
-
-
 void AMyProjectCharacter::AddItemToHotbar(const FString& ItemName, UTexture2D* ItemImage)
 {
 	const int32 MaxHotbarSize = 5;
@@ -355,15 +349,6 @@ void AMyProjectCharacter::AddItemToHotbar(const FString& ItemName, UTexture2D* I
 		UE_LOG(LogTemp, Warning, TEXT("Hotbar dolu! Yeni eşya eklenemiyor."));
 	}
 }
-
-
-
-
-
-
-
-
-
 
 void AMyProjectCharacter::ShowDialogue(AActor* InteractedNPC)
 {
@@ -417,10 +402,6 @@ void AMyProjectCharacter::ShowDialogue(AActor* InteractedNPC)
 	}
 }
 
-
-
-
-
 FString AMyProjectCharacter::GetLastReceivedItem() const
 {
     return LastReceivedItem;
@@ -431,9 +412,6 @@ void AMyProjectCharacter::SetLastReceivedItem(const FString& ItemName)
 	LastReceivedItem = ItemName;
 	UE_LOG(LogTemp, Warning, TEXT("LastReceivedItem güncellendi: %s"), *LastReceivedItem);
 }
-
-
-
 
 void AMyProjectCharacter::OnOption1Selected()
 {
@@ -461,22 +439,55 @@ void AMyProjectCharacter::OnOption2Selected()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Buton 2'ye basıldı!"));
 
-	// Eğer bir NPC ile etkileşimde bulunuluyorsa, görev ver
+	// Eğer bir NPC ile etkileşimde bulunuluyorsa
 	if (CurrentInteractedNPC)
 	{
-		// Arayüzü uygulayan bir aktör olup olmadığını kontrol et
-		if (CurrentInteractedNPC->GetClass()->ImplementsInterface(UInteractionInterface::StaticClass()))
+		ANPCCharacter* NPC = Cast<ANPCCharacter>(CurrentInteractedNPC);
+		if (NPC)
 		{
-			// PerformAction arayüz fonksiyonunu çağır
-			IInteractionInterface::Execute_PerformAction(CurrentInteractedNPC, 1); // ActionIndex = 1
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("CurrentInteractedNPC arayüzü uygulamıyor!"));
+			FString RequiredItem = NPC->TaskItem.ItemName;
+
+			// **Oyuncunun envanterinde bu item var mı kontrol et**
+			bool bHasRequiredItem = false;
+			for (const FHotbarItem& Item : HotbarItems)
+			{
+				if (Item.ItemName == RequiredItem && Item.Count > 0)
+				{
+					bHasRequiredItem = true;
+					break;
+				}
+			}
+
+			if (bHasRequiredItem)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[OnOption2Selected] Görev Tamamlandı!"));
+				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, TEXT("Görev Tamamlandı!"));
+
+				// **Görevi tamamlayınca item azalt**
+				for (FHotbarItem& Item : HotbarItems)
+				{
+					if (Item.ItemName == RequiredItem)
+					{
+						Item.Count -= 1;  // 1 tane düşür
+						break;
+					}
+				}
+
+				// **UI Güncellemesi**
+				if (HotbarWidget)
+				{
+					HotbarWidget->UpdateHotbar(HotbarItems);
+				}
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("[OnOption2Selected] Görev Tamamlanamadı: %s bulunamadı!"), *RequiredItem);
+				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("Görev Tamamlanamadı: Gerekli item yok!"));
+			}
 		}
 	}
 
-	CloseDialogue(); // Widget'i kapat
+	CloseDialogue(); // Diyalog penceresini kapat
 }
 
 void AMyProjectCharacter::OnOption3Selected()

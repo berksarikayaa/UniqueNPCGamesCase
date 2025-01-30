@@ -7,11 +7,9 @@
 #include "Blueprint/UserWidget.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Navigation/PathFollowingComponent.h"
-
 #include "MyProject/MyProjectCharacter.h"
 
 ANPCCharacter::ANPCCharacter()
@@ -80,8 +78,6 @@ void ANPCCharacter::Tick(float DeltaTime)
 	}
 }
 
-
-
 void ANPCCharacter::MoveToTarget()
 {
 	if (TargetLocation.IsNearlyZero() || IsMovingToTarget)
@@ -110,19 +106,6 @@ void ANPCCharacter::MoveToTarget()
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 void ANPCCharacter::CheckQueue()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[NPC] CheckQueue() fonksiyonu çağrıldı."));
@@ -136,22 +119,26 @@ void ANPCCharacter::CheckQueue()
 	WaitingQueue.Add(this);
 	int32 QueueIndex = WaitingQueue.Find(this);
 
+	// **NPC’yi uygun sıraya hareket ettir**
+	FVector QueuePosition = GetQueuePosition(QueueIndex);
+
+	// **Hemen hareket etmek yerine gecikmeli hareket etsin**
+	FTimerHandle MoveTimerHandle;
+	GetWorldTimerManager().SetTimer(
+		MoveTimerHandle, 
+		[this, QueuePosition]() { MoveToQueuePosition(QueuePosition); }, 
+		QueueIndex * 0.5f,  // **Sıraya göre gecikme ekle**
+		false
+	);
+
+	UE_LOG(LogTemp, Warning, TEXT("[NPC] Kuyruğa eklendi, bekliyor. Mevcut Kuyruk Uzunluğu: %d"), WaitingQueue.Num());
+
 	// Eğer ilk NPC isek hemen MoveToTarget çağır
 	if (QueueIndex == 0)
 	{
 		MoveToTarget();
 	}
-	else
-	{
-		// Bir önündeki NPC'nin arkasına gitmesini bekle
-		GetWorldTimerManager().SetTimerForNextTick(this, &ANPCCharacter::MoveToTarget);
-	}
-
-	UE_LOG(LogTemp, Warning, TEXT("[NPC] Kuyruğa eklendi, bekliyor. Mevcut Kuyruk Uzunluğu: %d"), WaitingQueue.Num());
 }
-
-
-
 
 
 FVector ANPCCharacter::GetQueuePosition(int32 Index)
@@ -176,13 +163,6 @@ FVector ANPCCharacter::GetQueuePosition(int32 Index)
 	return BaseLocation - FVector(OffsetDistance * Index, 0.0f, 0.0f);
 }
 
-
-
-
-
-
-
-
 void ANPCCharacter::MoveToQueuePosition(FVector QueuePosition)
 {
 	AAIController* AIController = Cast<AAIController>(GetController());
@@ -196,11 +176,6 @@ void ANPCCharacter::MoveToQueuePosition(FVector QueuePosition)
 		UE_LOG(LogTemp, Error, TEXT("[NPC] AI Controller bulunamadı! NPC sıraya hareket edemiyor."));
 	}
 }
-
-
-
-
-
 
 void ANPCCharacter::StartInteraction()
 {
@@ -237,7 +212,6 @@ void ANPCCharacter::FinishInteraction()
 		}
 	}
 }
-
 
 void ANPCCharacter::ReturnToSpawn()
 {
@@ -299,9 +273,6 @@ bool ANPCCharacter::HasReachedTarget()
 	return false;
 }
 
-
-
-
 void ANPCCharacter::Despawn()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[NPC] Yok oluyor!"));
@@ -320,8 +291,6 @@ void ANPCCharacter::Despawn()
 	UE_LOG(LogTemp, Warning, TEXT("[NPC] NPC Destroy() çağrılıyor!"));
 	Destroy(); // **Gerçekten yok olmasını sağlıyoruz**
 }
-
-
 
 void ANPCCharacter::Interact_Implementation(AActor* Interactor)
 {
@@ -350,6 +319,23 @@ void ANPCCharacter::UpdateNPCStatsInUI(UUserWidget* InDialogueWidget)
 {
 	UE_LOG(LogTemp, Warning, TEXT("[UpdateNPCStatsInUI] Fonksiyon çağrıldı!"));
 
+	if (!InDialogueWidget) 
+	{
+		UE_LOG(LogTemp, Error, TEXT("[UpdateNPCStatsInUI] DialogueWidget referansı NULL! UI güncellenemedi."));
+		return;
+	}
+
+	// **Görev İtemi Metnini Güncelle**
+	UTextBlock* TaskItemText = Cast<UTextBlock>(InDialogueWidget->GetWidgetFromName("TaskItemText"));
+	if (TaskItemText)
+	{
+		TaskItemText->SetText(FText::FromString(FString::Printf(TEXT("Görev İçin: %s"), *TaskItem.ItemName)));
+		UE_LOG(LogTemp, Warning, TEXT("[UpdateNPCStatsInUI] Görev Item Güncellendi: %s"), *TaskItem.ItemName);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[UpdateNPCStatsInUI] TaskItemText bulunamadı! UI içinde var mı?"));
+	}
 	if (!InDialogueWidget) 
 	{
 		UE_LOG(LogTemp, Error, TEXT("[UpdateNPCStatsInUI] DialogueWidget referansı NULL! UI güncellenemedi."));
@@ -392,7 +378,6 @@ void ANPCCharacter::UpdateNPCStatsInUI(UUserWidget* InDialogueWidget)
 	}
 }
 
-
 void ANPCCharacter::PerformAction_Implementation(int32 ActionIndex)
 {
 	switch (ActionIndex)
@@ -416,13 +401,11 @@ void ANPCCharacter::PerformAction_Implementation(int32 ActionIndex)
 	}
 }
 
-
 void ANPCCharacter::DetermineNextItemToGive()
 {
 	TArray<FHotbarItem> AvailableItems;
 
 	// **Örnek item'lar**
-
 	FHotbarItem PotionItem;
 	PotionItem.ItemName = TEXT("Potion");
 	PotionItem.ItemImage = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Textures/PotionImage"));
@@ -443,7 +426,6 @@ void ANPCCharacter::DetermineNextItemToGive()
 	HealthPotionItem.ItemName = TEXT("HealthPotion");
 	HealthPotionItem.ItemImage = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Textures/HealthPotionImage"));
 
-
 	// **Item'ları diziye ekleyelim**
 	AvailableItems.Add(PotionItem);
 	AvailableItems.Add(SwordItem);
@@ -451,12 +433,18 @@ void ANPCCharacter::DetermineNextItemToGive()
 	AvailableItems.Add(SpecialPotionItem);
 	AvailableItems.Add(HealthPotionItem);
 
-	// **Rastgele item seç**
+	// **Rastgele bir item belirle ve oyuncuya versin**
 	if (AvailableItems.Num() > 0)
 	{
 		int32 RandomIndex = FMath::RandRange(0, AvailableItems.Num() - 1);
 		NextItemToGive = AvailableItems[RandomIndex];
+
+		// **Aynı listeden rastgele bir görev itemi de belirle**
+		int32 TaskIndex = FMath::RandRange(0, AvailableItems.Num() - 1);
+		TaskItem = AvailableItems[TaskIndex];
+
 		UE_LOG(LogTemp, Warning, TEXT("[DetermineNextItemToGive] NPC'nin vereceği item: %s"), *NextItemToGive.ItemName);
+		UE_LOG(LogTemp, Warning, TEXT("[DetermineNextItemToGive] NPC'nin görev için istediği item: %s"), *TaskItem.ItemName);
 	}
 	else
 	{
@@ -512,5 +500,4 @@ void ANPCCharacter::TriggerNPCEvent()
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, NPCMessage);
 	}
 }
-
 
