@@ -23,7 +23,7 @@ public:
 	void DecreaseNPCCount();
 
 	int32 CurrentNPCCount = 0;
-	const int32 MaxNPCCount = 5;
+	const int32 MaxNPCCount = 4;
 
 	// **Spawn edilecek NPC'nin Blueprint sınıfı**
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Spawner")

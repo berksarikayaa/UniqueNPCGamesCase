@@ -489,6 +489,7 @@ void ANPCCharacter::CompleteTask()
 	UE_LOG(LogTemp, Warning, TEXT("NPC Görevi Tamamlıyor!"));
 	bTaskCompleted = true;
 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Görev Tamamlandı!"));
+	StartInteraction();
 }
 
 void ANPCCharacter::TriggerNPCEvent()

@@ -478,6 +478,7 @@ void AMyProjectCharacter::OnOption2Selected()
 				{
 					HotbarWidget->UpdateHotbar(HotbarItems);
 				}
+				NPC->ReturnToSpawn();
 			}
 			else
 			{
@@ -488,6 +489,7 @@ void AMyProjectCharacter::OnOption2Selected()
 	}
 
 	CloseDialogue(); // Diyalog penceresini kapat
+	
 }
 
 void AMyProjectCharacter::OnOption3Selected()
