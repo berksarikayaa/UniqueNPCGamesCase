@@ -3,8 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "InteractionInterface.h"
-#include "Blueprint/UserWidget.h"
-#include "Components/TextBlock.h"
+#include "QueueArea.h"
+class AQueueArea; 
 #include "HotbarItem.h"
 #include "NPCCharacter.generated.h"
 
@@ -25,6 +25,7 @@ class MYPROJECT_API ANPCCharacter : public ACharacter, public IInteractionInterf
 
 protected:
 	virtual void BeginPlay() override;
+	void CheckQueueSystem();
 
 public:
 
@@ -43,7 +44,6 @@ public:
 	void StartInteraction();
 	void FinishInteraction();
 	void ReturnToSpawn();
-	bool HasReachedTargetLocation() const;
 	bool HasReachedSpawnLocation() const;
 	bool HasReachedTarget();
 	void Despawn();
@@ -77,10 +77,12 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Animation")
 	UAnimInstance* NPCAnimInstance;
 
-
+	void EnterQueue();
+	bool bIsWaitingInQueue;
 	
 	ANPCCharacter();
 	virtual void Tick(float DeltaTime) override;
+	bool IsInsideQueueArea();
 	void UpdateAnimation();
 	void MoveToTarget();
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -115,6 +117,10 @@ public:
 
 	// **NPC'nin oyuncuya vereceği item**
 	FHotbarItem NextItemToGive;
+	
+	UPROPERTY()
+	AQueueArea* QueueArea; // NPC'lerin sıraya gireceği alan
+
 
 	// IInteractionInterface fonksiyonları
 	virtual void Interact_Implementation(AActor* Interactor) override;
@@ -132,7 +138,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
 	bool bTaskCompleted;
 
-
+	FVector QueueAreaCenter; // Sıra alanının merkezi
+	float QueueAreaRadius = 300.0f; // NPC'lerin sıraya gireceği alan yarıçapı
+	
 	UPROPERTY()
 	UUserWidget* DialogueWidget;
 

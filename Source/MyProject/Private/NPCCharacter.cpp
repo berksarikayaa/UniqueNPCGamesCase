@@ -4,6 +4,7 @@
 #include "EngineUtils.h"
 #include "HotbarItem.h"
 #include "NPCSpawner.h"
+#include "QueueArea.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/TextBlock.h"
@@ -22,22 +23,53 @@ ANPCCharacter::ANPCCharacter()
 	bTaskCompleted = false;
 	MovementSpeed = 300.0f;
 	NPCState = ENPCState::Spawning;
+	bIsWaitingInQueue = false;
 }
 
 void ANPCCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
+	
 	GetCharacterMovement()->SetAvoidanceEnabled(true); // AI kaçınmayı aç
-	GetCharacterMovement()->AvoidanceWeight = 1.0f;   // Çarpışmayı minimuma indir
 
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap); // NPC'ler birbirine çarpmasın
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Ignore);
+
+	GetCharacterMovement()->bUseRVOAvoidance = true;
+	GetCharacterMovement()->AvoidanceConsiderationRadius = 200.0f;
+	GetCharacterMovement()->AvoidanceWeight = 0.5f;   // Çarpışmayı minimuma indir
+
+
 
 	DetermineNextItemToGive();
 	RandomizeStats();
 	NPCAnimInstance = GetMesh()->GetAnimInstance();
 	SpawnLocation = GetActorLocation();
+	for (TActorIterator<AQueueArea> It(GetWorld()); It; ++It)
+	{
+		QueueArea = *It;
+		break; // İlk bulunan QueueArea'yı al
+	}
+
+	if (QueueArea)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[NPC] QueueArea bulundu: %s"), *QueueArea->GetName());
+		QueueArea->QueueList.Add(this); // NPC'yi sıralamaya ekleyelim
+		QueueArea->ProcessQueue(); // Sıradaki NPC'yi yönlendir
+	}
+
 	MoveToTarget();
+}
+
+void ANPCCharacter::CheckQueueSystem()
+{
+	if (!QueueArea) return;
+
+	if (!bIsWaitingInQueue && !QueueArea->QueueList.Contains(this))
+	{
+		QueueArea->QueueList.Add(this);
+		QueueArea->ProcessQueue();
+	}
 }
 
 
@@ -73,71 +105,19 @@ void ANPCCharacter::Tick(float DeltaTime)
 				}
 			}
 		}
-
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] Güncel Hız: %.2f, Should Move: %s"), CurrentSpeed, bShouldMove ? TEXT("True") : TEXT("False"));
 	}
 
 	UpdateAnimation();
+	if (IsInsideQueueArea()) 
+	{
+		CheckQueueSystem();
+	}
 
 }
 
-void ANPCCharacter::UpdateAnimation()
+bool ANPCCharacter::IsInsideQueueArea()
 {
-	if (!NPCAnimInstance) return;
-
-	float CurrentSpeed = GetVelocity().Size();
-	bool bIsMoving = (CurrentSpeed > 10.0f); // Eğer hız 10'dan büyükse yürüyordur
-
-	if (bIsMoving)
-	{
-		// Eğer şu an Idle animasyonu oynuyorsa, onu durdur
-		if (NPCAnimInstance->Montage_IsPlaying(IdleAnimMontage))
-		{
-			NPCAnimInstance->Montage_Stop(0.2f, IdleAnimMontage);
-		}
-
-		// Eğer yürüyüş animasyonu oynatmıyorsa, başlat
-		if (!NPCAnimInstance->Montage_IsPlaying(WalkAnimMontage))
-		{
-			NPCAnimInstance->Montage_Play(WalkAnimMontage, 1.0f);
-			UE_LOG(LogTemp, Warning, TEXT("[NPC] Yürüme animasyonu başlatıldı!"));
-		}
-	}
-	else
-	{
-		// Eğer şu an Yürüme animasyonu oynuyorsa, onu durdur
-		if (NPCAnimInstance->Montage_IsPlaying(WalkAnimMontage))
-		{
-			NPCAnimInstance->Montage_Stop(0.2f, WalkAnimMontage);
-		}
-
-		// Eğer idle animasyonu oynatmıyorsa, başlat
-		if (!NPCAnimInstance->Montage_IsPlaying(IdleAnimMontage))
-		{
-			NPCAnimInstance->Montage_Play(IdleAnimMontage, 1.0f);
-			UE_LOG(LogTemp, Warning, TEXT("[NPC] Idle animasyonu başlatıldı!"));
-		}
-	}
-}
-
-
-void ANPCCharacter::CheckQueue()
-{
-	if (!WaitingQueue.Contains(this))
-	{
-		WaitingQueue.Add(this);
-	}
-
-	for (int32 i = 0; i < WaitingQueue.Num(); i++)
-	{
-		ANPCCharacter* NPC = WaitingQueue[i];
-		if (NPC)
-		{
-			FVector NewPos = GetQueuePosition(i); // NPC'nin sıradaki doğru konumunu al
-			NPC->MoveToQueuePosition(NewPos);    // Doğru şekilde parametre ile çağır
-
-		}
-	}
+	return FVector::Dist(GetActorLocation(), QueueAreaCenter) <= QueueAreaRadius;
 }
 
 FVector ANPCCharacter::GetQueuePosition(int32 Index)
@@ -147,7 +127,6 @@ FVector ANPCCharacter::GetQueuePosition(int32 Index)
 
 	return BaseLocation - FVector(0.0f, OffsetDistance * Index, 0.0f); // Y ekseni boyunca hizalama
 }
-
 
 
 void ANPCCharacter::MoveToQueuePosition(FVector NewPosition)
@@ -166,94 +145,41 @@ void ANPCCharacter::MoveToQueuePosition(FVector NewPosition)
 
 
 
+
+
 void ANPCCharacter::MoveToTarget()
 {
-	if (TargetLocation.IsNearlyZero() || IsMovingToTarget)
+	if (!QueueArea) return; // Eğer QueueArea yoksa çık
+
+	if (QueueArea->QueueList.Num() > 0 && QueueArea->QueueList[0] != this)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] Zaten hareket halinde, tekrar yönlendirilmedi!"));
+		UE_LOG(LogTemp, Warning, TEXT("[NPC] Bu NPC sıranın en önünde değil, hedefe gidemez!"));
 		return;
 	}
 
-	int32 QueueIndex = WaitingQueue.Find(this);
-	FVector QueuePosition = GetQueuePosition(QueueIndex);
-
-	if (FVector::Dist(CurrentTargetLocation, QueuePosition) < 10.0f)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] Zaten hedefe gidiyor, tekrar yönlendirme yapılmadı."));
-		return;
-	}
-
-	CurrentTargetLocation = QueuePosition;
-	IsMovingToTarget = true;  // NPC'yi hareket moduna al
-
-	AAIController* AIController = Cast<AAIController>(GetController());
-	if (AIController)
-	{
-		AIController->MoveToLocation(CurrentTargetLocation, 10.0f, true, true, true, true, nullptr, true);
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] AI başarıyla sıradaki pozisyona yönlendirildi!"));
-	}
-}
-
-
-
-
-
-
-
-
-void ANPCCharacter::StartInteraction()
-{
-	NPCState = ENPCState::Interacting;
-	UE_LOG(LogTemp, Warning, TEXT("[NPC] Etkileşim başladı!"));
-	GetWorldTimerManager().SetTimer(InteractionTimerHandle, this, &ANPCCharacter::FinishInteraction, 2.0f, false);
-}
-
-void ANPCCharacter::FinishInteraction()
-{
-	ReturnToSpawn();
-    
-	if (WaitingQueue.Num() > 0)
-	{
-		ANPCCharacter* NextNPC = WaitingQueue[0];
-		WaitingQueue.RemoveAt(0);
-        
-		for (int32 i = 0; i < WaitingQueue.Num(); i++)
-		{
-			FVector NewPos = GetQueuePosition(i); // Doğru şekilde yeni pozisyonu hesapla
-			WaitingQueue[i]->MoveToQueuePosition(NewPos); // Pozisyonu fonksiyona gönder
-		}
-        
-		if (NextNPC) NextNPC->StartInteraction();
-	}
-}
-
-
-void ANPCCharacter::ReturnToSpawn()
-{
-	NPCState = ENPCState::Leaving;
 	if (AAIController* AIController = Cast<AAIController>(GetController()))
 	{
-		AIController->MoveToLocation(SpawnLocation, 50.0f);
+		AIController->MoveToLocation(TargetLocation);
+		UE_LOG(LogTemp, Warning, TEXT("[NPC] Hedefe yönlendirildi!"));
 	}
 }
 
-bool ANPCCharacter::HasReachedSpawnLocation() const
-{
-	return FVector::Dist(GetActorLocation(), SpawnLocation) <= 100.0f;
-}
 
-void ANPCCharacter::Despawn()
-{
-	for (TActorIterator<ANPCSpawner> It(GetWorld()); It; ++It)
-	{
-		if (ANPCSpawner* NPCSpawner = *It)
-		{
-			NPCSpawner->DecreaseNPCCount();
-			break;
-		}
-	}
-	Destroy();
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 bool ANPCCharacter::HasReachedTarget()
@@ -269,6 +195,72 @@ bool ANPCCharacter::HasReachedTarget()
 	return false;
 }
 
+void ANPCCharacter::StartInteraction()
+{
+	NPCState = ENPCState::Interacting;
+	UE_LOG(LogTemp, Warning, TEXT("[NPC] Etkileşim başladı!"));
+	GetWorldTimerManager().SetTimer(InteractionTimerHandle, this, &ANPCCharacter::FinishInteraction, 2.0f, false);
+}
+
+void ANPCCharacter::FinishInteraction()
+{
+	if (!QueueArea) return;
+
+	// Öncelikle sıradaki NPC'yi sıradan çıkar
+	QueueArea->QueueList.Remove(this);
+	QueueArea->ProcessQueue(); // Kalan NPC'leri yeniden hizala
+
+	UE_LOG(LogTemp, Warning, TEXT("[NPC] Etkileşim tamamlandı, spawn noktasına dönüyor."));
+	ReturnToSpawn();
+}
+
+
+
+
+
+void ANPCCharacter::ReturnToSpawn()
+{
+	if (!QueueArea) return; // Eğer QueueArea yoksa işlemi iptal et
+
+	NPCState = ENPCState::Leaving;
+
+	// QueueArea içindeki NPC'yi kaldır
+	QueueArea->QueueList.Remove(this);
+	QueueArea->ProcessQueue(); // Kalan NPC'leri yeniden sıraya sok
+
+	// Hareket etmeden önce AI Controller'ın geçerli olduğundan emin ol
+	if (AAIController* AIController = Cast<AAIController>(GetController()))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[NPC] Spawn noktasına dönüyor: X=%.2f, Y=%.2f, Z=%.2f"), 
+			   SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
+
+		AIController->MoveToLocation(SpawnLocation, 50.0f, true, true, true, true, nullptr, true);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[NPC] AIController bulunamadı!"));
+	}
+}
+
+
+bool ANPCCharacter::HasReachedSpawnLocation() const
+{
+	return FVector::Dist(GetActorLocation(), SpawnLocation) <= 100.0f;
+}
+
+
+void ANPCCharacter::Despawn()
+{
+	for (TActorIterator<ANPCSpawner> It(GetWorld()); It; ++It)
+	{
+		if (ANPCSpawner* NPCSpawner = *It)
+		{
+			NPCSpawner->DecreaseNPCCount();
+			break;
+		}
+	}
+	Destroy();
+}
 
 void ANPCCharacter::Interact_Implementation(AActor* Interactor)
 {
@@ -477,3 +469,41 @@ void ANPCCharacter::TriggerNPCEvent()
 	}
 }
 
+void ANPCCharacter::UpdateAnimation()
+{
+	if (!NPCAnimInstance) return;
+
+	float CurrentSpeed = GetVelocity().Size();
+	bool bIsMoving = (CurrentSpeed > 10.0f); // Eğer hız 10'dan büyükse yürüyordur
+
+	if (bIsMoving)
+	{
+		// Eğer şu an Idle animasyonu oynuyorsa, onu durdur
+		if (NPCAnimInstance->Montage_IsPlaying(IdleAnimMontage))
+		{
+			NPCAnimInstance->Montage_Stop(0.2f, IdleAnimMontage);
+		}
+
+		// Eğer yürüyüş animasyonu oynatmıyorsa, başlat
+		if (!NPCAnimInstance->Montage_IsPlaying(WalkAnimMontage))
+		{
+			NPCAnimInstance->Montage_Play(WalkAnimMontage, 1.0f);
+			UE_LOG(LogTemp, Warning, TEXT("[NPC] Yürüme animasyonu başlatıldı!"));
+		}
+	}
+	else
+	{
+		// Eğer şu an Yürüme animasyonu oynuyorsa, onu durdur
+		if (NPCAnimInstance->Montage_IsPlaying(WalkAnimMontage))
+		{
+			NPCAnimInstance->Montage_Stop(0.2f, WalkAnimMontage);
+		}
+
+		// Eğer idle animasyonu oynatmıyorsa, başlat
+		if (!NPCAnimInstance->Montage_IsPlaying(IdleAnimMontage))
+		{
+			NPCAnimInstance->Montage_Play(IdleAnimMontage, 1.0f);
+			UE_LOG(LogTemp, Warning, TEXT("[NPC] Idle animasyonu başlatıldı!"));
+		}
+	}
+}
