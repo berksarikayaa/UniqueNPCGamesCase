@@ -28,10 +28,16 @@ protected:
 
 public:
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	UAnimMontage* WalkAnimMontage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	UAnimMontage* IdleAnimMontage;
+	
 	void ReturnToSpawn(FVector SpawnPoint);
 	void CheckQueue();
 	FVector GetQueuePosition(int32 Index);
-	void MoveToQueuePosition(FVector QueuePosition);
+	void MoveToQueuePosition(FVector NewPosition);
 	void CheckAIController();
 	void SetNPCState(ENPCState NewState);
 	void StartInteraction();
@@ -67,9 +73,15 @@ public:
 	// **Timer için Handle Tanımla**
 	FTimerHandle InteractionTimerHandle;
 	FTimerHandle DespawnTimerHandle;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Animation")
+	UAnimInstance* NPCAnimInstance;
+
+
 	
 	ANPCCharacter();
 	virtual void Tick(float DeltaTime) override;
+	void UpdateAnimation();
 	void MoveToTarget();
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
