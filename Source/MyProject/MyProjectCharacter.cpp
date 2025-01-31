@@ -18,8 +18,6 @@
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
-//////////////////////////////////////////////////////////////////////////
-// AMyProjectCharacter
 
 AMyProjectCharacter::AMyProjectCharacter()
 {
@@ -49,33 +47,18 @@ void AMyProjectCharacter::BeginPlay()
 	
 	if (DialogueWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("DialogueWidgetClass başarıyla ayarlandı: %s"), *DialogueWidgetClass->GetName());
 
 		CurrentDialogueWidget = CreateWidget<UUserWidget>(GetWorld(), DialogueWidgetClass);
 
-		if (CurrentDialogueWidget)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("CurrentDialogueWidget başarıyla oluşturuldu!"));
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("CreateWidget başarısız oldu!"));
-		}
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("DialogueWidgetClass nullptr! Widget sınıfı atanmadı."));
-	}
+
 
 	if (HotbarWidgetClass == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("HotbarWidgetClass nullptr! Widget blueprint atanmamış olabilir."));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("HotbarWidgetClass başarıyla ayarlandı: %s"), *HotbarWidgetClass->GetName());
 
-	// Widget'ı oluşturup, UHotbarWidget olarak cast edelim.
 	UUserWidget* TempWidget = CreateWidget<UUserWidget>(GetWorld(), HotbarWidgetClass);
 	HotbarWidget = Cast<UHotbarWidget>(TempWidget);
 
@@ -83,12 +66,8 @@ void AMyProjectCharacter::BeginPlay()
 	{
 		HotbarWidget->AddToViewport();
         
-		UE_LOG(LogTemp, Warning, TEXT("HotbarWidget başarıyla oluşturuldu ve ekrana eklendi."));
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("HotbarWidget oluşturulamadı! Tip dönüşümü başarısız oldu."));
-	}
+
 
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
 	if (PlayerController)
@@ -97,12 +76,8 @@ void AMyProjectCharacter::BeginPlay()
 		if (Subsystem)
 		{
 			Subsystem->AddMappingContext(HotbarMappingContext, 0);
-			UE_LOG(LogTemp, Warning, TEXT("Hotbar Input Mapping Context yüklendi!"));
 		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("Enhanced Input Subsystem bulunamadı!"));
-		}
+
 	}
 	
 
@@ -112,22 +87,12 @@ void AMyProjectCharacter::UpdateOptionButton3Text(const FString& ItemName)
 {
     if (CurrentDialogueWidget)
     {
-        // **OptionButton3'ün içindeki TextBlock'u elle bul**
         UTextBlock* OptionButton3Text = Cast<UTextBlock>(CurrentDialogueWidget->GetWidgetFromName("OptionButton3Text"));
 
         if (OptionButton3Text)
         {
             OptionButton3Text->SetText(FText::FromString(ItemName));
-            UE_LOG(LogTemp, Warning, TEXT("3. Butonun metni güncellendi: %s"), *ItemName);
         }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("OptionButton3Text bulunamadı! Blueprint içinde 'OptionButton3Text' isminde bir TextBlock var mı?"));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Diyalog ekranı açık değil!"));
     }
 }
 
@@ -135,7 +100,6 @@ void AMyProjectCharacter::BindDialogueButtons()
 {
     if (!CurrentDialogueWidget)
     {
-        UE_LOG(LogTemp, Error, TEXT("BindDialogueButtons: CurrentDialogueWidget nullptr!"));
         return;
     }
 
@@ -148,11 +112,6 @@ void AMyProjectCharacter::BindDialogueButtons()
         if (!OptionButton1->OnClicked.IsBound()) {
             OptionButton1->OnClicked.AddDynamic(this, &AMyProjectCharacter::OnOption1Selected);
         }
-        UE_LOG(LogTemp, Warning, TEXT("OptionButton1 başarıyla bulundu ve bağlandı!"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("OptionButton1 bulunamadı!"));
     }
 
     if (OptionButton2)
@@ -160,29 +119,20 @@ void AMyProjectCharacter::BindDialogueButtons()
         if (!OptionButton2->OnClicked.IsBound()) {
             OptionButton2->OnClicked.AddDynamic(this, &AMyProjectCharacter::OnOption2Selected);
         }
-        UE_LOG(LogTemp, Warning, TEXT("OptionButton2 başarıyla bulundu ve bağlandı!"));
     }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("OptionButton2 bulunamadı!"));
-    }
+
 
     if (OptionButton3)
     {
         if (!OptionButton3->OnClicked.IsBound()) {
             OptionButton3->OnClicked.AddDynamic(this, &AMyProjectCharacter::OnOption3Selected);
         }
-        UE_LOG(LogTemp, Warning, TEXT("OptionButton3 başarıyla bulundu ve bağlandı!"));
     }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("OptionButton3 bulunamadı! UI'da doğru isimlendirilmiş mi?"));
-    }
+
 }
 
 void AMyProjectCharacter::OnDialogueOptionSelected()
 {
-	// Hangi butona tıklandığını kontrol et
 	if (OptionButton1 && OptionButton1->IsPressed())
 	{
 		OnOption1Selected();
@@ -217,12 +167,7 @@ void AMyProjectCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMyProjectCharacter::Look);
 	}
-	else
-	{
-		UE_LOG(LogTemplateCharacter, Error, TEXT("'%s' Failed to find an Enhanced Input Component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
-	}
 
-	// Interact tuşunu bağlama
 	PlayerInputComponent->BindAction("Interact", IE_Pressed, this, &AMyProjectCharacter::Interact);
 }
 
@@ -255,34 +200,27 @@ void AMyProjectCharacter::CloseDialogue()
 		CurrentDialogueWidget->RemoveFromParent();
 		CurrentDialogueWidget = nullptr;
 	
-		// Fare imlecini gizle ve giriş modunu eski haline getir
 		APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
 		if (PlayerController)
 		{
 			PlayerController->bShowMouseCursor = false;
 
-			// Giriş modunu oyun moduna döndür
 			FInputModeGameOnly InputMode;
 			PlayerController->SetInputMode(InputMode);
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("Diyalog kapatıldı."));
 	}
 }
 
 void AMyProjectCharacter::Interact()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Interact fonksiyonu çağrıldı!"));
 
-	// Eğer bir diyalog widget'ı zaten açık ise, kapat
 	if (CurrentDialogueWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CurrentDialogueWidget mevcut, CloseDialogue çağrılıyor."));
 		CloseDialogue();
 		return;
 	}
 
-	// LineTrace ile bir aktörle çarpışmayı kontrol et
 	FVector Start = GetActorLocation();
 	FVector ForwardVector = GetActorForwardVector();
 	FVector End = Start + (ForwardVector * 500.0f);
@@ -297,22 +235,10 @@ void AMyProjectCharacter::Interact()
 	{
 		AActor* HitActor = HitResult.GetActor();
 
-		// Çarpılan aktörün geçerli olup olmadığını kontrol et
 		if (HitActor && HitActor->GetClass()->ImplementsInterface(UInteractionInterface::StaticClass()))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("NPC ile etkileşim kuruldu: %s"), *HitActor->GetName());
-
-			// Diyalog aç
 			ShowDialogue(HitActor);
 		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Etkileşimde bulunulan aktör bir NPC değil."));
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Hiçbir şeyle etkileşim kurulamadı."));
 	}
 }
 
@@ -320,70 +246,50 @@ void AMyProjectCharacter::AddItemToHotbar(const FString& ItemName, UTexture2D* I
 {
 	const int32 MaxHotbarSize = 5;
 
-	// Item ekleme işlemine başlamadan önce boş slot var mı diye kontrol edelim
 	for (FHotbarItem& ExistingItem : HotbarItems)
 	{
-		if (ExistingItem.ItemName == ItemName)  // Aynı item varsa, count'u arttır
+		if (ExistingItem.ItemName == ItemName)  
 		{
-			ExistingItem.Count += 1;  // Item sayısını arttır
-			HotbarWidget->UpdateHotbar(HotbarItems);  // UI'yi güncelle
+			ExistingItem.Count += 1;
+			HotbarWidget->UpdateHotbar(HotbarItems); 
 			return;
 		}
 	}
 
-	// Eğer item bulunamazsa, yeni item ekle
 	if (HotbarItems.Num() < MaxHotbarSize)
 	{
 		FHotbarItem NewItem;
 		NewItem.ItemName = ItemName;
 		NewItem.ItemImage = ItemImage;
-		NewItem.Count = 1;  // Yeni eklenen item'ın sayısı 1 olacak
+		NewItem.Count = 1;  
 
-		HotbarItems.Add(NewItem);  // Yeni item ekle
+		HotbarItems.Add(NewItem);  
 
-		HotbarWidget->UpdateHotbar(HotbarItems);  // UI'yi güncelle
-		UE_LOG(LogTemp, Warning, TEXT("%s hotbar'a eklendi!"), *ItemName);
+		HotbarWidget->UpdateHotbar(HotbarItems); 
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Hotbar dolu! Yeni eşya eklenemiyor."));
-	}
+
 }
 
 void AMyProjectCharacter::ShowDialogue(AActor* InteractedNPC)
 {
-	UE_LOG(LogTemp, Warning, TEXT("[ShowDialogue] Çağrıldı!"));
-
 	CurrentInteractedNPC = InteractedNPC;
 
 	if (!CurrentDialogueWidget && DialogueWidgetClass)
 	{
 		CurrentDialogueWidget = CreateWidget<UUserWidget>(GetWorld(), DialogueWidgetClass);
-		if (CurrentDialogueWidget)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[ShowDialogue] CurrentDialogueWidget başarıyla oluşturuldu!"));
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("[ShowDialogue] CreateWidget başarısız oldu!"));
-			return;
-		}
 	}
 
 	if (CurrentDialogueWidget)
 	{
 		CurrentDialogueWidget->AddToViewport();
 
-		// **Butonları bağla**
 		BindDialogueButtons();
 
-		// **NPC'nin belirlediği item'i al ve butonu güncelle**
 		ANPCCharacter* NPC = Cast<ANPCCharacter>(CurrentInteractedNPC);
 		if (NPC)
 		{
 			NPC->UpdateNPCStatsInUI(CurrentDialogueWidget);
 			FString NextItem = NPC->NextItemToGive.ItemName;
-			UE_LOG(LogTemp, Warning, TEXT("[ShowDialogue] 3. Butonun metni güncelleniyor: %s"), *NextItem);
 			UpdateOptionButton3Text(NextItem);
 		}
 
@@ -396,10 +302,6 @@ void AMyProjectCharacter::ShowDialogue(AActor* InteractedNPC)
 			PlayerController->SetInputMode(InputMode);
 		}
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[ShowDialogue] CurrentDialogueWidget oluşturulamadı!"));
-	}
 }
 
 FString AMyProjectCharacter::GetLastReceivedItem() const
@@ -410,36 +312,26 @@ FString AMyProjectCharacter::GetLastReceivedItem() const
 void AMyProjectCharacter::SetLastReceivedItem(const FString& ItemName)
 {
 	LastReceivedItem = ItemName;
-	UE_LOG(LogTemp, Warning, TEXT("LastReceivedItem güncellendi: %s"), *LastReceivedItem);
 }
 
 void AMyProjectCharacter::OnOption1Selected()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Buton 1'e basıldı!"));
 
-	// Eğer bir NPC ile etkileşimde bulunuluyorsa, animasyon oynat
 	if (CurrentInteractedNPC)
 	{
-		// Arayüzü uygulayan bir aktör olup olmadığını kontrol et
 		if (CurrentInteractedNPC->GetClass()->ImplementsInterface(UInteractionInterface::StaticClass()))
 		{
-			// PerformAction arayüz fonksiyonunu çağır
-			IInteractionInterface::Execute_PerformAction(CurrentInteractedNPC, 0); // ActionIndex = 0
+			IInteractionInterface::Execute_PerformAction(CurrentInteractedNPC, 0); 
 		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("CurrentInteractedNPC arayüzü uygulamıyor!"));
-		}
+
 	}
 
-	CloseDialogue(); // Widget'i kapat
+	CloseDialogue(); 
 }
 
 void AMyProjectCharacter::OnOption2Selected()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Buton 2'ye basıldı!"));
 
-	// Eğer bir NPC ile etkileşimde bulunuluyorsa
 	if (CurrentInteractedNPC)
 	{
 		ANPCCharacter* NPC = Cast<ANPCCharacter>(CurrentInteractedNPC);
@@ -447,7 +339,6 @@ void AMyProjectCharacter::OnOption2Selected()
 		{
 			FString RequiredItem = NPC->TaskItem.ItemName;
 
-			// **Oyuncunun envanterinde bu item var mı kontrol et**
 			bool bHasRequiredItem = false;
 			for (const FHotbarItem& Item : HotbarItems)
 			{
@@ -457,23 +348,19 @@ void AMyProjectCharacter::OnOption2Selected()
 					break;
 				}
 			}
-
 			if (bHasRequiredItem)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("[OnOption2Selected] Görev Tamamlandı!"));
 				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, TEXT("Görev Tamamlandı!"));
 
-				// **Görevi tamamlayınca item azalt**
 				for (FHotbarItem& Item : HotbarItems)
 				{
 					if (Item.ItemName == RequiredItem)
 					{
-						Item.Count -= 1;  // 1 tane düşür
+						Item.Count -= 1;
 						break;
 					}
 				}
 
-				// **UI Güncellemesi**
 				if (HotbarWidget)
 				{
 					HotbarWidget->UpdateHotbar(HotbarItems);
@@ -482,67 +369,50 @@ void AMyProjectCharacter::OnOption2Selected()
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("[OnOption2Selected] Görev Tamamlanamadı: %s bulunamadı!"), *RequiredItem);
 				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("Görev Tamamlanamadı: Gerekli item yok!"));
 			}
 		}
 	}
 
-	CloseDialogue(); // Diyalog penceresini kapat
+	CloseDialogue();
 	
 }
 
 void AMyProjectCharacter::OnOption3Selected()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Buton 3'e basıldı!"));
 
-	// Eğer bir NPC ile etkileşimde bulunuluyorsa, yeni bir seviye yükle
 	if (CurrentInteractedNPC)
 	{
-		// Arayüzü uygulayan bir aktör olup olmadığını kontrol et
 		if (CurrentInteractedNPC->GetClass()->ImplementsInterface(UInteractionInterface::StaticClass()))
 		{
-			// PerformAction arayüz fonksiyonunu çağır
-			IInteractionInterface::Execute_PerformAction(CurrentInteractedNPC, 2); // ActionIndex = 2
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("CurrentInteractedNPC arayüzü uygulamıyor!"));
+			IInteractionInterface::Execute_PerformAction(CurrentInteractedNPC, 2);
 		}
 	}
 
-	CloseDialogue(); // Widget'i kapat
+	CloseDialogue(); 
 }
 
 void AMyProjectCharacter::UseHotbarItem(int32 SlotIndex)
 {
-	if (HotbarItems.IsValidIndex(SlotIndex) && HotbarItems[SlotIndex].Count > 0)  // Eğer geçerli öğe varsa
+	if (HotbarItems.IsValidIndex(SlotIndex) && HotbarItems[SlotIndex].Count > 0) 
 	{
-		FHotbarItem& UsedItem = HotbarItems[SlotIndex];  // Tıklanan item
+		FHotbarItem& UsedItem = HotbarItems[SlotIndex]; 
 
 		if (UsedItem.Count > 1)
 		{
-			UsedItem.Count -= 1;  // Sadece 1 tanesini kullanıyoruz
+			UsedItem.Count -= 1; 
 		}
 		else
 		{
-			// Eğer item sayısı 1 ise, item tamamen kullanılır ve sayıyı sıfırla
 			UsedItem.Count = 0;
 		}
-
-		// UI Güncellemesi
 		if (HotbarWidget)
 		{
-			HotbarWidget->UpdateHotbar(HotbarItems);  // UI'yi güncelle
+			HotbarWidget->UpdateHotbar(HotbarItems);
 		}
 
-		// Öğenin ismini ekrana yazdırıyoruz
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("Kullanılan item: %s"), *UsedItem.ItemName));
 
-		UE_LOG(LogTemp, Warning, TEXT("%s kullanıldı! Slot güncellendi."), *UsedItem.ItemName);
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("Geçersiz Hotbar slotu seçildi veya zaten boş!"));
-	}
+
 }

@@ -17,53 +17,65 @@ ANPCCharacter::ANPCCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	// Varsayılan değerler
+	bHasLeftQueue = false;
 	NPCMessage = TEXT("Merhaba, ben bir NPC'yim!");
 	NPCAnimation = nullptr;
 	bTaskCompleted = false;
 	MovementSpeed = 300.0f;
 	NPCState = ENPCState::Spawning;
 	bIsWaitingInQueue = false;
+	WalkAnimMontage = nullptr;
+	IdleAnimMontage = nullptr;
+	PreviousNPCInQueue = nullptr;
+	NPCAnimInstance = nullptr;
+	QueueArea = nullptr;
+	DialogueWidget = nullptr;
+	Agility = 1.0f;
+	Experience = 0;
+	IsMerchant = false;
+
+
 }
 
 void ANPCCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	GetCharacterMovement()->SetAvoidanceEnabled(true); // AI kaçınmayı aç
 
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap); // NPC'ler birbirine çarpmasın
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Ignore);
-
+	GetCharacterMovement()->SetAvoidanceEnabled(true);
 	GetCharacterMovement()->bUseRVOAvoidance = true;
-	GetCharacterMovement()->AvoidanceConsiderationRadius = 200.0f;
-	GetCharacterMovement()->AvoidanceWeight = 0.5f;   // Çarpışmayı minimuma indir
+	GetCharacterMovement()->AvoidanceConsiderationRadius = 250.0f;
+	GetCharacterMovement()->AvoidanceWeight = 0.2f;  
 
-
-
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); 
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Ignore);
+	
 	DetermineNextItemToGive();
 	RandomizeStats();
 	NPCAnimInstance = GetMesh()->GetAnimInstance();
 	SpawnLocation = GetActorLocation();
+
 	for (TActorIterator<AQueueArea> It(GetWorld()); It; ++It)
 	{
-		QueueArea = *It;
-		break; // İlk bulunan QueueArea'yı al
+		if (*It) 
+		{
+			QueueArea = *It;
+			break; 
+		}
 	}
 
 	if (QueueArea)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] QueueArea bulundu: %s"), *QueueArea->GetName());
-		QueueArea->QueueList.Add(this); // NPC'yi sıralamaya ekleyelim
-		QueueArea->ProcessQueue(); // Sıradaki NPC'yi yönlendir
+		if (!QueueArea->QueueList.Contains(this))
+		{
+			QueueArea->QueueList.Add(this);
+			QueueArea->ProcessQueue();
+		}
 	}
-
-	MoveToTarget();
 }
 
 void ANPCCharacter::CheckQueueSystem()
 {
-	if (!QueueArea) return;
+	if (!QueueArea || bHasLeftQueue) return;
 
 	if (!bIsWaitingInQueue && !QueueArea->QueueList.Contains(this))
 	{
@@ -72,37 +84,31 @@ void ANPCCharacter::CheckQueueSystem()
 	}
 }
 
-
 void ANPCCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
 	if (NPCState == ENPCState::Leaving && HasReachedSpawnLocation())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] Spawn noktasına ulaştı, yok ediliyor!"));
 		Despawn();
 	}
 
-
-
-	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-	if (AnimInstance)
+	if (APlayerController* PlayerController = GetWorld()->GetFirstPlayerController())
 	{
-		float CurrentSpeed = GetVelocity().Size();
-		bool bShouldMove = (CurrentSpeed > 10.0f); // Eğer hız 10'dan büyükse yürüyordur
-
-		// Blueprint içinde "Should Move" değişkenini güncelle
-		UAnimBlueprintGeneratedClass* AnimBPClass = Cast<UAnimBlueprintGeneratedClass>(AnimInstance->GetClass());
-		if (AnimBPClass)
+		if (APawn* PlayerPawn = PlayerController->GetPawn())
 		{
-			FProperty* ShouldMoveProperty = AnimBPClass->FindPropertyByName(FName("Should Move"));
-			if (ShouldMoveProperty)
+			float DistanceToPlayer = FVector::Dist(PlayerPawn->GetActorLocation(), GetActorLocation());
+
+			if (DistanceToPlayer <= 1000.0f) 
 			{
-				bool* ShouldMovePtr = ShouldMoveProperty->ContainerPtrToValuePtr<bool>(AnimInstance);
-				if (ShouldMovePtr)
-				{
-					*ShouldMovePtr = bShouldMove;
-				}
+				FVector PlayerLocation = PlayerPawn->GetActorLocation();
+				FVector NPCToPlayer = PlayerLocation - GetActorLocation();
+				NPCToPlayer.Z = 0.0f;
+
+				FRotator TargetRotation = NPCToPlayer.Rotation();
+				FRotator SmoothRotation = FMath::RInterpTo(GetActorRotation(), TargetRotation, DeltaTime, 5.0f);
+                
+				SetActorRotation(SmoothRotation);
 			}
 		}
 	}
@@ -122,65 +128,27 @@ bool ANPCCharacter::IsInsideQueueArea()
 
 FVector ANPCCharacter::GetQueuePosition(int32 Index)
 {
-	FVector BaseLocation = TargetLocation;
-	float OffsetDistance = 150.0f; // NPC'ler arasındaki mesafe
+	if (!QueueArea) return GetActorLocation();
 
-	return BaseLocation - FVector(0.0f, OffsetDistance * Index, 0.0f); // Y ekseni boyunca hizalama
+	FVector BaseLocation = QueueArea->GetActorLocation();
+	float OffsetDistance = 200.0f;
+	return BaseLocation + FVector(0.0f, -OffsetDistance * Index, 0.0f);
 }
 
-
-void ANPCCharacter::MoveToQueuePosition(FVector NewPosition)
+void ANPCCharacter::MoveToQueuePosition()
 {
+	if (!QueueArea) return; 
+
+	int32 Index = QueueArea->QueueList.Find(this);
+	FVector NewPosition = GetQueuePosition(Index); 
+
 	if (AAIController* AIController = Cast<AAIController>(GetController()))
 	{
 		AIController->MoveToLocation(NewPosition, 5.0f, true, true, true, true, nullptr, true);
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] Sıraya gidiyor. Yeni Pozisyon: X=%.2f, Y=%.2f, Z=%.2f"), 
-			   NewPosition.X, NewPosition.Y, NewPosition.Z);
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[NPC] AI Controller bulunamadı! NPC sıraya hareket edemiyor."));
-	}
+
+
 }
-
-
-
-
-
-void ANPCCharacter::MoveToTarget()
-{
-	if (!QueueArea) return; // Eğer QueueArea yoksa çık
-
-	if (QueueArea->QueueList.Num() > 0 && QueueArea->QueueList[0] != this)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] Bu NPC sıranın en önünde değil, hedefe gidemez!"));
-		return;
-	}
-
-	if (AAIController* AIController = Cast<AAIController>(GetController()))
-	{
-		AIController->MoveToLocation(TargetLocation);
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] Hedefe yönlendirildi!"));
-	}
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 bool ANPCCharacter::HasReachedTarget()
 {
@@ -188,7 +156,7 @@ bool ANPCCharacter::HasReachedTarget()
     
 	if (Distance <= 10.0f)
 	{
-		IsMovingToTarget = false; // NPC artık hareket etmiyor
+		IsMovingToTarget = false; 
 		return true;
 	}
 
@@ -198,7 +166,6 @@ bool ANPCCharacter::HasReachedTarget()
 void ANPCCharacter::StartInteraction()
 {
 	NPCState = ENPCState::Interacting;
-	UE_LOG(LogTemp, Warning, TEXT("[NPC] Etkileşim başladı!"));
 	GetWorldTimerManager().SetTimer(InteractionTimerHandle, this, &ANPCCharacter::FinishInteraction, 2.0f, false);
 }
 
@@ -206,48 +173,45 @@ void ANPCCharacter::FinishInteraction()
 {
 	if (!QueueArea) return;
 
-	// Öncelikle sıradaki NPC'yi sıradan çıkar
-	QueueArea->QueueList.Remove(this);
-	QueueArea->ProcessQueue(); // Kalan NPC'leri yeniden hizala
+	if (QueueArea->QueueList.Contains(this))
+	{
+		QueueArea->QueueList.Remove(this);
+	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[NPC] Etkileşim tamamlandı, spawn noktasına dönüyor."));
+	bHasLeftQueue = true; 
+    
 	ReturnToSpawn();
 }
 
-
-
-
-
 void ANPCCharacter::ReturnToSpawn()
 {
-	if (!QueueArea) return; // Eğer QueueArea yoksa işlemi iptal et
+	if (!QueueArea) return;
 
 	NPCState = ENPCState::Leaving;
 
-	// QueueArea içindeki NPC'yi kaldır
-	QueueArea->QueueList.Remove(this);
-	QueueArea->ProcessQueue(); // Kalan NPC'leri yeniden sıraya sok
-
-	// Hareket etmeden önce AI Controller'ın geçerli olduğundan emin ol
-	if (AAIController* AIController = Cast<AAIController>(GetController()))
+	if (QueueArea->QueueList.Contains(this))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[NPC] Spawn noktasına dönüyor: X=%.2f, Y=%.2f, Z=%.2f"), 
-			   SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
+		QueueArea->QueueList.Remove(this);
+	}
 
-		AIController->MoveToLocation(SpawnLocation, 50.0f, true, true, true, true, nullptr, true);
-	}
-	else
+	QueueArea->ProcessQueue(); 
+
+	AAIController* AIController = Cast<AAIController>(GetController());
+	if (!AIController)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[NPC] AIController bulunamadı!"));
+		return;
 	}
+
+	FVector AdjustedSpawnLocation = SpawnLocation;
+	AdjustedSpawnLocation.Z += 10.0f;
+
+	AIController->MoveToLocation(AdjustedSpawnLocation, 100.0f, true, true, true, true, nullptr, true);
 }
-
 
 bool ANPCCharacter::HasReachedSpawnLocation() const
 {
-	return FVector::Dist(GetActorLocation(), SpawnLocation) <= 100.0f;
+	return FVector::Dist(GetActorLocation(), SpawnLocation) <= 150.0f;
 }
-
 
 void ANPCCharacter::Despawn()
 {
@@ -265,14 +229,12 @@ void ANPCCharacter::Despawn()
 void ANPCCharacter::Interact_Implementation(AActor* Interactor)
 {
 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Blue, *FString::Printf(TEXT("NPC Mesajı: %s"), *NPCMessage));
-	UE_LOG(LogTemp, Warning, TEXT("[NPC] Oyuncu ile etkileşime girdi!"));
 	StartInteraction();
 }
 
 void ANPCCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
 }
 
 void ANPCCharacter::RandomizeStats()
@@ -284,65 +246,38 @@ void ANPCCharacter::RandomizeStats()
 
 void ANPCCharacter::UpdateNPCStatsInUI(UUserWidget* InDialogueWidget)
 {
-	UE_LOG(LogTemp, Warning, TEXT("[UpdateNPCStatsInUI] Fonksiyon çağrıldı!"));
-
 	if (!InDialogueWidget) 
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UpdateNPCStatsInUI] DialogueWidget referansı NULL! UI güncellenemedi."));
 		return;
 	}
-
-	// **Görev İtemi Metnini Güncelle**
 	UTextBlock* TaskItemText = Cast<UTextBlock>(InDialogueWidget->GetWidgetFromName("TaskItemText"));
 	if (TaskItemText)
 	{
 		TaskItemText->SetText(FText::FromString(FString::Printf(TEXT("Görev İçin: %s"), *TaskItem.ItemName)));
-		UE_LOG(LogTemp, Warning, TEXT("[UpdateNPCStatsInUI] Görev Item Güncellendi: %s"), *TaskItem.ItemName);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[UpdateNPCStatsInUI] TaskItemText bulunamadı! UI içinde var mı?"));
 	}
 	if (!InDialogueWidget) 
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UpdateNPCStatsInUI] DialogueWidget referansı NULL! UI güncellenemedi."));
 		return;
 	}
-
 	UTextBlock* AgilityText = Cast<UTextBlock>(InDialogueWidget->GetWidgetFromName("AgilityText"));
 	UTextBlock* ExperienceText = Cast<UTextBlock>(InDialogueWidget->GetWidgetFromName("ExperienceText"));
 	UTextBlock* IsMerchantText = Cast<UTextBlock>(InDialogueWidget->GetWidgetFromName("IsMerchantText"));
-
 	if (AgilityText)
 	{
 		AgilityText->SetText(FText::FromString(FString::Printf(TEXT("Hız: %.2f"), Agility)));
-		UE_LOG(LogTemp, Warning, TEXT("[UpdateNPCStatsInUI] Agility güncellendi: %.2f"), Agility);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[UpdateNPCStatsInUI] AgilityText bulunamadı! UI içinde var mı?"));
 	}
 
 	if (ExperienceText)
 	{
 		ExperienceText->SetText(FText::FromString(FString::Printf(TEXT("Deneyim: %d"), Experience)));
-		UE_LOG(LogTemp, Warning, TEXT("[UpdateNPCStatsInUI] Experience güncellendi: %d"), Experience);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[UpdateNPCStatsInUI] ExperienceText bulunamadı! UI içinde var mı?"));
 	}
 
 	if (IsMerchantText)
 	{
 		FString MerchantText = IsMerchant ? TEXT("Bu NPC bir tüccardır.") : TEXT("Bu NPC tüccar değildir.");
 		IsMerchantText->SetText(FText::FromString(MerchantText));
-		UE_LOG(LogTemp, Warning, TEXT("[UpdateNPCStatsInUI] IsMerchant güncellendi: %s"), *MerchantText);
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[UpdateNPCStatsInUI] IsMerchantText bulunamadı! UI içinde var mı?"));
-	}
+
 }
 
 void ANPCCharacter::PerformAction_Implementation(int32 ActionIndex)
@@ -363,7 +298,6 @@ void ANPCCharacter::PerformAction_Implementation(int32 ActionIndex)
 		StartInteraction();
 		break;
 	default:
-		UE_LOG(LogTemp, Warning, TEXT("Geçersiz Seçenek!"));
 		break;
 	}
 }
@@ -372,7 +306,6 @@ void ANPCCharacter::DetermineNextItemToGive()
 {
 	TArray<FHotbarItem> AvailableItems;
 
-	// **Örnek item'lar**
 	FHotbarItem PotionItem;
 	PotionItem.ItemName = TEXT("Potion");
 	PotionItem.ItemImage = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Textures/PotionImage"));
@@ -385,66 +318,51 @@ void ANPCCharacter::DetermineNextItemToGive()
 	ShieldItem.ItemName = TEXT("Shield");
 	ShieldItem.ItemImage = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Textures/ShieldImage"));
 
-	FHotbarItem SpecialPotionItem;
-	SpecialPotionItem.ItemName = TEXT("SpecialPotion");
-	SpecialPotionItem.ItemImage = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Textures/SpecialPotionImage"));
+	FHotbarItem SausageItem;
+	SausageItem.ItemName = TEXT("Sausage");
+	SausageItem.ItemImage = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Textures/SausageImage"));
 
-	FHotbarItem HealthPotionItem;
-	HealthPotionItem.ItemName = TEXT("HealthPotion");
-	HealthPotionItem.ItemImage = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Textures/HealthPotionImage"));
+	FHotbarItem StrawberryItem;
+	StrawberryItem.ItemName = TEXT("Strawberry");
+	StrawberryItem.ItemImage = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Textures/StrawberryImage"));
 
-	// **Item'ları diziye ekleyelim**
 	AvailableItems.Add(PotionItem);
 	AvailableItems.Add(SwordItem);
 	AvailableItems.Add(ShieldItem);
-	AvailableItems.Add(SpecialPotionItem);
-	AvailableItems.Add(HealthPotionItem);
+	AvailableItems.Add(SausageItem);
+	AvailableItems.Add(StrawberryItem);
 
-	// **Rastgele bir item belirle ve oyuncuya versin**
 	if (AvailableItems.Num() > 0)
 	{
 		int32 RandomIndex = FMath::RandRange(0, AvailableItems.Num() - 1);
 		NextItemToGive = AvailableItems[RandomIndex];
 
-		// **Aynı listeden rastgele bir görev itemi de belirle**
 		int32 TaskIndex = FMath::RandRange(0, AvailableItems.Num() - 1);
 		TaskItem = AvailableItems[TaskIndex];
 
-		UE_LOG(LogTemp, Warning, TEXT("[DetermineNextItemToGive] NPC'nin vereceği item: %s"), *NextItemToGive.ItemName);
-		UE_LOG(LogTemp, Warning, TEXT("[DetermineNextItemToGive] NPC'nin görev için istediği item: %s"), *TaskItem.ItemName);
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[DetermineNextItemToGive] Item listesi boş!"));
-	}
+
 }
 
 void ANPCCharacter::GiveItemToPlayer()
 {
 	if (!NextItemToGive.ItemName.IsEmpty())
 	{
-		// **Oyuncuya item ver**
 		APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
 		AMyProjectCharacter* PlayerCharacter = Cast<AMyProjectCharacter>(PlayerController->GetCharacter());
 
 		if (PlayerCharacter)
 		{
 			PlayerCharacter->AddItemToHotbar(NextItemToGive.ItemName, NextItemToGive.ItemImage);
-			UE_LOG(LogTemp, Warning, TEXT("[GiveItemToPlayer] NPC oyuncuya %s verdi!"), *NextItemToGive.ItemName);
 
-			// **Yeni item belirle**
 			DetermineNextItemToGive();
 		}
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[GiveItemToPlayer] NextItemToGive belirlenmemiş!"));
-	}
+
 }
 
 void ANPCCharacter::PlayNPCAnimation()
 {
-	UE_LOG(LogTemp, Warning, TEXT("NPC Animasyon Oynatıyor!"));
 	if (NPCAnimation)
 	{
 		PlayAnimMontage(NPCAnimation);
@@ -453,7 +371,6 @@ void ANPCCharacter::PlayNPCAnimation()
 
 void ANPCCharacter::CompleteTask()
 {
-	UE_LOG(LogTemp, Warning, TEXT("NPC Görevi Tamamlıyor!"));
 	bTaskCompleted = true;
 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Görev Tamamlandı!"));
 	StartInteraction();
@@ -461,7 +378,6 @@ void ANPCCharacter::CompleteTask()
 
 void ANPCCharacter::TriggerNPCEvent()
 {
-	UE_LOG(LogTemp, Warning, TEXT("NPC Yeni Bir Event Tetikliyor!"));
 
 	if (GEngine)
 	{
@@ -474,36 +390,36 @@ void ANPCCharacter::UpdateAnimation()
 	if (!NPCAnimInstance) return;
 
 	float CurrentSpeed = GetVelocity().Size();
-	bool bIsMoving = (CurrentSpeed > 10.0f); // Eğer hız 10'dan büyükse yürüyordur
+	bool bIsMoving = (CurrentSpeed > 10.0f);
+
+	if (NPCAnimInstance->IsAnyMontagePlaying())
+	{
+		return;
+	}
 
 	if (bIsMoving)
 	{
-		// Eğer şu an Idle animasyonu oynuyorsa, onu durdur
-		if (NPCAnimInstance->Montage_IsPlaying(IdleAnimMontage))
+		if (IdleAnimMontage && NPCAnimInstance->Montage_IsPlaying(IdleAnimMontage))
 		{
 			NPCAnimInstance->Montage_Stop(0.2f, IdleAnimMontage);
 		}
 
-		// Eğer yürüyüş animasyonu oynatmıyorsa, başlat
-		if (!NPCAnimInstance->Montage_IsPlaying(WalkAnimMontage))
+		if (WalkAnimMontage && !NPCAnimInstance->Montage_IsPlaying(WalkAnimMontage))
 		{
 			NPCAnimInstance->Montage_Play(WalkAnimMontage, 1.0f);
-			UE_LOG(LogTemp, Warning, TEXT("[NPC] Yürüme animasyonu başlatıldı!"));
 		}
 	}
 	else
 	{
-		// Eğer şu an Yürüme animasyonu oynuyorsa, onu durdur
-		if (NPCAnimInstance->Montage_IsPlaying(WalkAnimMontage))
+		if (WalkAnimMontage && NPCAnimInstance->Montage_IsPlaying(WalkAnimMontage))
 		{
 			NPCAnimInstance->Montage_Stop(0.2f, WalkAnimMontage);
 		}
 
-		// Eğer idle animasyonu oynatmıyorsa, başlat
-		if (!NPCAnimInstance->Montage_IsPlaying(IdleAnimMontage))
+		if (IdleAnimMontage && !NPCAnimInstance->Montage_IsPlaying(IdleAnimMontage) && !NPCAnimInstance->IsAnyMontagePlaying())
 		{
 			NPCAnimInstance->Montage_Play(IdleAnimMontage, 1.0f);
-			UE_LOG(LogTemp, Warning, TEXT("[NPC] Idle animasyonu başlatıldı!"));
 		}
 	}
 }
+

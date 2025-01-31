@@ -35,12 +35,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	UAnimMontage* IdleAnimMontage;
 	
-	void ReturnToSpawn(FVector SpawnPoint);
-	void CheckQueue();
 	FVector GetQueuePosition(int32 Index);
-	void MoveToQueuePosition(FVector NewPosition);
-	void CheckAIController();
-	void SetNPCState(ENPCState NewState);
+	void MoveToQueuePosition();
 	void StartInteraction();
 	void FinishInteraction();
 	void ReturnToSpawn();
@@ -52,9 +48,6 @@ public:
 
 	bool bInteracted = false;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
-	FVector TargetLocation;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
 	FVector SpawnLocation;
 
@@ -68,23 +61,22 @@ public:
 	TArray<ANPCCharacter*> WaitingQueue;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
-	ANPCCharacter* PreviousNPCInQueue;  // Önündeki NPC
+	ANPCCharacter* PreviousNPCInQueue;  
 
-	// **Timer için Handle Tanımla**
 	FTimerHandle InteractionTimerHandle;
 	FTimerHandle DespawnTimerHandle;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Animation")
 	UAnimInstance* NPCAnimInstance;
 
-	void EnterQueue();
+	bool bHasLeftQueue;
+	
 	bool bIsWaitingInQueue;
 	
 	ANPCCharacter();
 	virtual void Tick(float DeltaTime) override;
 	bool IsInsideQueueArea();
 	void UpdateAnimation();
-	void MoveToTarget();
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 	FVector CurrentTargetLocation;
@@ -93,42 +85,33 @@ public:
 	bool IsMovingToTarget = false;
 	
 	void UpdateNPCStatsInUI(UUserWidget* InDialogueWidget);
-	// **NPC'nin rastgele statları**
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Stats")
-	float Agility;  // **Hız (Float)**
+	float Agility;  
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Stats")
-	int32 Experience;  // **Deneyim Puanı (Int32)**
+	int32 Experience; 
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC Stats")
-	bool IsMerchant;  // **Tüccar mı? (Boolean)**
+	bool IsMerchant;
 
-	// **NPC'nin animasyonunu oynatır**
 	void PlayNPCAnimation();
 
-	// **NPC'nin görev tamamlama fonksiyonu**
 	void CompleteTask();
 
-	// **NPC'nin event tetikleme fonksiyonu**
 	void TriggerNPCEvent();
 
-	// **NPC'ye rastgele bir item belirleme**
 	void DetermineNextItemToGive();
 
-	// **NPC'nin oyuncuya vereceği item**
 	FHotbarItem NextItemToGive;
 	
 	UPROPERTY()
-	AQueueArea* QueueArea; // NPC'lerin sıraya gireceği alan
+	AQueueArea* QueueArea; 
 
 
-	// IInteractionInterface fonksiyonları
 	virtual void Interact_Implementation(AActor* Interactor) override;
 	virtual void PerformAction_Implementation(int32 ActionIndex) override;
 	
-	// **Oyuncuya item verme fonksiyonu**
 	void GiveItemToPlayer();
-	// NPC için diyalog widget'ı
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
 	FString NPCMessage;
 
@@ -138,8 +121,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
 	bool bTaskCompleted;
 
-	FVector QueueAreaCenter; // Sıra alanının merkezi
-	float QueueAreaRadius = 300.0f; // NPC'lerin sıraya gireceği alan yarıçapı
+	FVector QueueAreaCenter; 
+	float QueueAreaRadius = 300.0f; 
 	
 	UPROPERTY()
 	UUserWidget* DialogueWidget;

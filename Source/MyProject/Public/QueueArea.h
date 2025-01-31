@@ -20,7 +20,7 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	TArray<ANPCCharacter*> QueueList; // NPC'leri sıraya almak için liste
+	TArray<ANPCCharacter*> QueueList; 
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Queue")
 	UBoxComponent* QueueTrigger;

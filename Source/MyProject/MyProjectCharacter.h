@@ -5,7 +5,7 @@
 #include "Components/Button.h"
 #include "GameFramework/Character.h"
 #include "HotbarWidget.h"
-#include "HotbarItem.h"  // HotbarItem struct'ını dahil ettik
+#include "HotbarItem.h"  
 #include "Containers/Array.h"
 
 #include "MyProjectCharacter.generated.h"
@@ -59,11 +59,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	void Interact();
 
-	// Envanter listesi
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
 	TArray<FString> Inventory;
 
-	// Hotbar Tuşları için InputAction Referansları
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
 	UInputAction* UseHotbarSlot1Action;
 
@@ -79,7 +77,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
 	UInputAction* UseHotbarSlot5Action;
 
-	// Hotbar dizisi (maksimum 5 eşya içerebilir)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hotbar")
 	TArray<FHotbarItem> HotbarItems;
 
@@ -88,7 +85,6 @@ public:
 
 	UHotbarWidget* HotbarWidget;
 	
-	// Hotbar'a eşya ekleme fonksiyonu
 	UFUNCTION(BlueprintCallable, Category = "Hotbar")
 	void AddItemToHotbar(const FString& ItemName, UTexture2D* ItemImage);
 
@@ -99,27 +95,22 @@ public:
 
 	void SetLastReceivedItem(const FString& ItemName);
 
-	// Diyalog ekranını açma fonksiyonu
 	void ShowDialogue(AActor* InteractedNPC);
 
 	FString GetLastReceivedItem() const;
 
 private:
-    FString LastReceivedItem;  // En son alınan item ismi
+    FString LastReceivedItem;  
 
-	// Diyalog Widget'ı için referans
 	UPROPERTY()
 	UUserWidget* CurrentDialogueWidget;
 
-	// Diyalog Widget'ı sınıfı
 	UPROPERTY(EditAnywhere, Category = "UI")
 	TSubclassOf<UUserWidget> DialogueWidgetClass;
 
-	// Etkileşimde bulunulan NPC'yi saklamak için referans
 	UPROPERTY()
 	AActor* CurrentInteractedNPC;
 
-	// Buton referansları (widget'tan alınacak)
 	UPROPERTY()
 	UButton* OptionButton1;
 
@@ -129,20 +120,16 @@ private:
 	UPROPERTY()
 	UButton* OptionButton3;
 
-	/** Buton event'lerini bağlamak için bir yardımcı fonksiyon */
 	void BindDialogueButtons();
 
 	void CloseDialogue();
 	
-	/** Option 1 seçildiğinde çağrılır */
 	UFUNCTION()
 	void OnOption1Selected();
 
-	/** Option 2 seçildiğinde çağrılır */
 	UFUNCTION()
 	void OnOption2Selected();
 
-	/** Option 3 seçildiğinde çağrılır */
 	UFUNCTION()
 	void OnOption3Selected();
 

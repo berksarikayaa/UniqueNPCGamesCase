@@ -9,8 +9,6 @@ void UNPCStatsWidget::SetNPCStats(float InYas, int32 InPara, bool InAcgozluluk)
 	Para = InPara;
 	Acgozluluk = InAcgozluluk;
 
-	// Burada widget'taki görsel öğeleri güncelleyebilirsiniz.
-	// Örneğin, bir TextBlock'un metnini ayarlamak gibi.
 }
 
 

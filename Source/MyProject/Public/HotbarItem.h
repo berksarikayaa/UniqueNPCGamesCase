@@ -1,9 +1,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/Texture2D.h"  // Görsel türü için gerekli
+#include "Engine/Texture2D.h"  
 #include "UObject/NoExportTypes.h"
-#include "HotbarItem.generated.h"  // Unreal'in gerekli makrosu
+#include "HotbarItem.generated.h"  
 
 USTRUCT(BlueprintType)
 struct FHotbarItem
@@ -15,15 +15,15 @@ public:
 	FString ItemName;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hotbar")
-	UTexture2D* ItemImage;  // Görseli Texture2D olarak tutacağız
+	UTexture2D* ItemImage;  
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hotbar")
-	int32 Count;  // Item'ın stack sayısı
+	int32 Count;  
 
 	FHotbarItem()
 	{
 		ItemName = TEXT("Default Item");
 		ItemImage = nullptr;
-		Count = 1;  // Başlangıçta 1 olarak ayarlıyoruz
+		Count = 1;  
 	}
 };
